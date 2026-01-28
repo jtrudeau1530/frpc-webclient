@@ -1,0 +1,21 @@
+[Unit]
+Description=FRPC Web Client
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/frpc-webclient
+ExecStart=/usr/bin/node /opt/frpc-webclient/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=frpc-webclient
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
