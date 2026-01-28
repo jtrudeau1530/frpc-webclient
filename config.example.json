@@ -1,0 +1,10 @@
+{
+  "port": 8080,
+  "frpcConfigPath": "/opt/frp/frpc.toml",
+  "sessionSecret": "CHANGE_THIS_TO_A_RANDOM_STRING",
+  "username": "admin",
+  "passwordHash": "$2a$10$YourHashedPasswordHere",
+  "enableBackups": true,
+  "backupDir": "/opt/frp/backups",
+  "frpcServiceName": "frpc"
+}
