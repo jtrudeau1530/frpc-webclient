@@ -32,7 +32,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false, // Set to true if using HTTPS
+    secure: config.secureCookie || false, // Set to true if using HTTPS
+    httpOnly: true, // Prevent client-side JavaScript access
     maxAge: 3600000 // 1 hour
   }
 }));
@@ -131,10 +132,19 @@ function tomlValue(value) {
   return `"${value}"`;
 }
 
+// Helper function to validate service name
+function validateServiceName(name) {
+  // Only allow alphanumeric, hyphens, underscores, and dots
+  return /^[a-zA-Z0-9_.-]+$/.test(name);
+}
+
 // Helper function to restart FRPC service
 async function restartFrpcService() {
   try {
     const serviceName = config.frpcServiceName || 'frpc';
+    if (!validateServiceName(serviceName)) {
+      throw new Error('Invalid service name');
+    }
     await execPromise(`sudo systemctl restart ${serviceName}`);
     return { success: true };
   } catch (error) {
@@ -163,8 +173,13 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
 // Logout endpoint
 app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Error destroying session:', err);
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ success: true });
+  });
 });
 
 // Check authentication status
@@ -172,16 +187,33 @@ app.get('/api/auth/status', (req, res) => {
   res.json({ authenticated: !!req.session.authenticated });
 });
 
+// Reserved top-level configuration keys that are not proxies
+const RESERVED_CONFIG_KEYS = [
+  'serverAddr', 'serverPort', 'auth', 'user', 'token', 'log', 'transport',
+  'loginFailExit', 'protocol', 'tls', 'dnsServer', 'start', 'adminAddr',
+  'adminPort', 'adminUser', 'adminPwd', 'assetsDir', 'poolCount',
+  'tcpMux', 'tcpMuxKeepaliveInterval', 'logFile', 'logLevel', 'logMaxDays'
+];
+
+// Helper function to check if a key is a proxy configuration
+function isProxyConfig(key, value) {
+  // Reserved keys are not proxies
+  if (RESERVED_CONFIG_KEYS.includes(key)) {
+    return false;
+  }
+  // Proxies are objects with a 'type' field
+  return typeof value === 'object' && value !== null && value.type;
+}
+
 // Get all proxies
 app.get('/api/proxies', requireAuth, (req, res) => {
   try {
     const frpcConfig = readFrpcConfig();
     const proxies = {};
     
-    // Extract proxy configurations (all sections except top-level config)
-    const topLevelKeys = ['serverAddr', 'serverPort', 'auth', 'user', 'token', 'log', 'transport'];
+    // Extract proxy configurations
     for (const [key, value] of Object.entries(frpcConfig)) {
-      if (typeof value === 'object' && value !== null && !topLevelKeys.includes(key)) {
+      if (isProxyConfig(key, value)) {
         proxies[key] = value;
       }
     }
@@ -222,6 +254,11 @@ app.post('/api/proxies', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'Invalid proxy name. Use only alphanumeric characters, hyphens, and underscores.' });
     }
     
+    // Prevent overwriting reserved configuration keys
+    if (RESERVED_CONFIG_KEYS.includes(name)) {
+      return res.status(400).json({ error: 'Cannot use reserved configuration key as proxy name' });
+    }
+    
     const frpcConfig = readFrpcConfig();
     
     if (frpcConfig[name]) {
@@ -233,7 +270,8 @@ app.post('/api/proxies', requireAuth, (req, res) => {
     
     res.json({ success: true, message: 'Proxy created successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error creating proxy:', error);
+    res.status(500).json({ error: 'Failed to create proxy' });
   }
 });
 
@@ -247,10 +285,20 @@ app.put('/api/proxies/:name', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'Proxy configuration is required' });
     }
     
+    // Prevent modifying reserved configuration keys
+    if (RESERVED_CONFIG_KEYS.includes(proxyName)) {
+      return res.status(400).json({ error: 'Cannot modify reserved configuration key' });
+    }
+    
     const frpcConfig = readFrpcConfig();
     
     if (!frpcConfig[proxyName]) {
       return res.status(404).json({ error: 'Proxy not found' });
+    }
+    
+    // Ensure it's actually a proxy configuration
+    if (!isProxyConfig(proxyName, frpcConfig[proxyName])) {
+      return res.status(400).json({ error: 'Cannot modify non-proxy configuration' });
     }
     
     frpcConfig[proxyName] = proxyConfig;
@@ -258,7 +306,8 @@ app.put('/api/proxies/:name', requireAuth, (req, res) => {
     
     res.json({ success: true, message: 'Proxy updated successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error updating proxy:', error);
+    res.status(500).json({ error: 'Failed to update proxy' });
   }
 });
 
@@ -266,10 +315,21 @@ app.put('/api/proxies/:name', requireAuth, (req, res) => {
 app.delete('/api/proxies/:name', requireAuth, (req, res) => {
   try {
     const proxyName = req.params.name;
+    
+    // Prevent deleting reserved configuration keys
+    if (RESERVED_CONFIG_KEYS.includes(proxyName)) {
+      return res.status(400).json({ error: 'Cannot delete reserved configuration key' });
+    }
+    
     const frpcConfig = readFrpcConfig();
     
     if (!frpcConfig[proxyName]) {
       return res.status(404).json({ error: 'Proxy not found' });
+    }
+    
+    // Ensure it's actually a proxy configuration
+    if (!isProxyConfig(proxyName, frpcConfig[proxyName])) {
+      return res.status(400).json({ error: 'Cannot delete non-proxy configuration' });
     }
     
     delete frpcConfig[proxyName];
@@ -277,7 +337,8 @@ app.delete('/api/proxies/:name', requireAuth, (req, res) => {
     
     res.json({ success: true, message: 'Proxy deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error deleting proxy:', error);
+    res.status(500).json({ error: 'Failed to delete proxy' });
   }
 });
 
@@ -299,6 +360,9 @@ app.post('/api/restart', requireAuth, async (req, res) => {
 app.get('/api/status', requireAuth, async (req, res) => {
   try {
     const serviceName = config.frpcServiceName || 'frpc';
+    if (!validateServiceName(serviceName)) {
+      throw new Error('Invalid service name');
+    }
     const { stdout } = await execPromise(`systemctl is-active ${serviceName}`);
     const isActive = stdout.trim() === 'active';
     res.json({ active: isActive, service: serviceName });

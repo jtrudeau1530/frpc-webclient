@@ -41,7 +41,10 @@ mkdir -p "$INSTALL_DIR"
 
 # Copy files to installation directory
 echo "Copying files..."
-cp -r ./* "$INSTALL_DIR/"
+cp package.json "$INSTALL_DIR/"
+cp server.js "$INSTALL_DIR/"
+cp frpc-webclient.service "$INSTALL_DIR/"
+cp -r public "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
 
 # Install dependencies
@@ -66,8 +69,8 @@ if [ ! -f "$INSTALL_DIR/config.json" ]; then
         exit 1
     fi
     
-    # Generate password hash using Node.js
-    PASSWORD_HASH=$(node -e "const bcrypt = require('bcryptjs'); console.log(bcrypt.hashSync('$PASSWORD', 10));")
+    # Generate password hash using Node.js (securely via stdin)
+    PASSWORD_HASH=$(node -e "const bcrypt = require('bcryptjs'); const readline = require('readline'); const rl = readline.createInterface({input: process.stdin}); rl.on('line', (line) => {console.log(bcrypt.hashSync(line, 10)); process.exit();});" <<< "$PASSWORD")
     
     # Generate random session secret
     SESSION_SECRET=$(openssl rand -hex 32)
@@ -78,6 +81,7 @@ if [ ! -f "$INSTALL_DIR/config.json" ]; then
   "port": 8080,
   "frpcConfigPath": "/opt/frp/frpc.toml",
   "sessionSecret": "$SESSION_SECRET",
+  "secureCookie": false,
   "username": "admin",
   "passwordHash": "$PASSWORD_HASH",
   "enableBackups": true,

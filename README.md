@@ -94,6 +94,7 @@ node server.js
 | `port` | Port for web interface | `8080` |
 | `frpcConfigPath` | Path to frpc.toml | `/opt/frp/frpc.toml` |
 | `sessionSecret` | Secret for session encryption | (required) |
+| `secureCookie` | Enable secure cookie flag (HTTPS only) | `false` |
 | `username` | Login username | `admin` |
 | `passwordHash` | Bcrypt hashed password | (required) |
 | `enableBackups` | Enable automatic backups | `true` |
