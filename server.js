@@ -45,6 +45,13 @@ const loginLimiter = rateLimit({
   message: 'Too many login attempts, please try again later.'
 });
 
+// Rate limiting for service operations
+const serviceLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 10, // limit each IP to 10 requests per windowMs
+  message: 'Too many service operations, please try again later.'
+});
+
 // Authentication middleware
 function requireAuth(req, res, next) {
   if (req.session && req.session.authenticated) {
@@ -121,7 +128,9 @@ function configToToml(obj) {
 // Helper function to format TOML values
 function tomlValue(value) {
   if (typeof value === 'string') {
-    return `"${value.replace(/"/g, '\\"')}"`;
+    // Properly escape strings for TOML: escape backslashes first, then quotes
+    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    return `"${escaped}"`;
   } else if (typeof value === 'number') {
     return value;
   } else if (typeof value === 'boolean') {
@@ -343,7 +352,7 @@ app.delete('/api/proxies/:name', requireAuth, (req, res) => {
 });
 
 // Restart FRPC service
-app.post('/api/restart', requireAuth, async (req, res) => {
+app.post('/api/restart', requireAuth, serviceLimiter, async (req, res) => {
   try {
     const result = await restartFrpcService();
     if (result.success) {

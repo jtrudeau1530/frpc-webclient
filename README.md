@@ -121,6 +121,8 @@ sudo systemctl restart frpc-webclient
 
 ### For Internet Exposure
 
+⚠️ **Important**: This application is designed to be used behind a reverse proxy with HTTPS. Direct internet exposure without HTTPS is not recommended.
+
 1. **Use HTTPS**: Set up a reverse proxy (nginx/caddy) with SSL:
 
 Example nginx configuration:
@@ -132,11 +134,25 @@ server {
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
     
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
     location / {
         proxy_pass http://localhost:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
+}
+```
+
+After setting up HTTPS, update `config.json`:
+```json
+{
+  "secureCookie": true
 }
 ```
 
