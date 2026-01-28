@@ -35,7 +35,8 @@ sudo ./install.sh
 
 The installer will:
 - Install Node.js if not present
-- Install dependencies
+- Install all npm dependencies (`npm install --production`)
+  - express, express-rate-limit, bcryptjs, express-session, toml
 - Create a configuration file
 - Set up systemd service with auto-restart
 - Configure sudoers for service restart

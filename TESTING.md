@@ -6,6 +6,8 @@ This document provides instructions for testing the FRPC Web Client.
 
 1. Node.js installed (v14+)
 2. Dependencies installed: `npm install`
+   - This downloads: express, express-rate-limit, bcryptjs, express-session, toml
+   - The install.sh script automatically runs `npm install --production`
 3. Test configuration file created
 
 ## Quick Test Setup

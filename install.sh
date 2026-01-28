@@ -49,6 +49,8 @@ cd "$INSTALL_DIR"
 
 # Install dependencies
 echo "Installing dependencies..."
+echo "  - Running: npm install --production"
+echo "  - This will download: express, express-rate-limit, bcryptjs, express-session, toml"
 npm install --production
 
 # Create config file if it doesn't exist
